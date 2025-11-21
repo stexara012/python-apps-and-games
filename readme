@@ -1,2 +1,4 @@
 Python
 Hotel,Bank,blood bank,hospital not my projects i worked tutorials
+
+for encrypt/decrypt you will need pip install cryptography qrcode pillow reportlab tkinterdnd2
