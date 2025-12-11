@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pixel Boxing Game - Full</title>
+<style>
+  body { margin:0; overflow:hidden; background:#87CEEB; }
+  canvas { display:block; margin:auto; background:#87CEEB; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="450"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const gravity = 0.5;
+const groundY = 400;
+
+// ---- PLAYER ----
+let player = {
+ x:100, y:groundY-48, w:16, h:48,
+ vx:0, vy:0, speed:3, jump:-10, onGround:true,
+ health:10, attackCooldown:{U:0,J:0,I:0,K:0}, facing:1
+};
+
+// ---- ENEMY CLASS ----
+class Enemy {
+ constructor(x,y,type=0){
+   this.x=x; this.y=y; this.w=16; this.h=48;
+   this.vx=1; this.vy=0; this.health=5+type; // higher type = more health
+   this.onGround=true; this.facing=-1;
+   this.attackCooldown=0;
+   this.type=type;
+ }
+ update(){
+   if(this.health<=0) return;
+   // Move toward player
+   if(this.x < player.x-10) { this.facing=1; this.x+=this.vx; }
+   else if(this.x > player.x+10) { this.facing=-1; this.x-=this.vx; }
+
+   // Gravity
+   this.vy += gravity;
+   this.y += this.vy;
+   if(this.y+this.h>groundY){ this.y=groundY-this.h; this.vy=0; this.onGround=true;}
+
+   // Attack if close
+   if(this.attackCooldown<=0 && Math.abs(this.x-player.x)<30){
+     player.health -= 0.2 + this.type*0.05;
+     this.attackCooldown=50;
+   }
+   if(this.attackCooldown>0) this.attackCooldown--;
+ }
+ draw(){
+   if(this.health<=0) return;
+   ctx.fillStyle='purple';
+   ctx.fillRect(this.x,this.y,this.w,this.h);
+   ctx.fillStyle='black';
+   ctx.fillRect(this.x+4,this.y,this.w-8,8); // head
+   ctx.fillStyle='red';
+   ctx.fillRect(this.x,this.y-6,16*(this.health/(5+this.type)),4);
+ }
+}
+
+// ---- LEVELS CONFIG ----
+const levels = [
+ // level 1
+ {platforms:[{x:300,y:groundY-20,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:0}]},
+ // level 2
+ {platforms:[{x:250,y:groundY-20,w:50,h:20},{x:500,y:groundY-50,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:0},{x:700,y:groundY-48,type:0}]},
+ // level 3
+ {platforms:[{x:200,y:groundY-20,w:50,h:20},{x:400,y:groundY-50,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:1},{x:700,y:groundY-48,type:0}]},
+ // level 4
+ {platforms:[{x:150,y:groundY-20,w:50,h:20},{x:400,y:groundY-50,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:1},{x:720,y:groundY-48,type:1}]},
+ // level 5
+ {platforms:[{x:150,y:groundY-20,w:50,h:20},{x:300,y:groundY-50,w:50,h:20},{x:500,y:groundY-80,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:1},{x:720,y:groundY-48,type:2}]},
+ // level 6
+ {platforms:[{x:100,y:groundY-20,w:50,h:20},{x:300,y:groundY-50,w:50,h:20},{x:500,y:groundY-80,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:2},{x:720,y:groundY-48,type:1}]},
+ // level 7
+ {platforms:[{x:100,y:groundY-20,w:50,h:20},{x:250,y:groundY-50,w:50,h:20},{x:500,y:groundY-80,w:50,h:20},{x:650,y:groundY-110,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:2},{x:720,y:groundY-48,type:2}]},
+ // level 8
+ {platforms:[{x:150,y:groundY-20,w:50,h:20},{x:300,y:groundY-50,w:50,h:20},{x:450,y:groundY-80,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:3},{x:720,y:groundY-48,type:2}]},
+ // level 9
+ {platforms:[{x:100,y:groundY-20,w:50,h:20},{x:250,y:groundY-50,w:50,h:20},{x:400,y:groundY-80,w:50,h:20},{x:550,y:groundY-110,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:3},{x:720,y:groundY-48,type:3}]},
+ // level 10
+ {platforms:[{x:100,y:groundY-20,w:50,h:20},{x:250,y:groundY-50,w:50,h:20},{x:400,y:groundY-80,w:50,h:20},{x:550,y:groundY-110,w:50,h:20},{x:700,y:groundY-140,w:50,h:20}], enemies:[{x:600,y:groundY-48,type:3},{x:720,y:groundY-48,type:3},{x:750,y:groundY-48,type:2}]},
+ // final boss (level 11)
+ {platforms:[{x:200,y:groundY-20,w:50,h:20},{x:400,y:groundY-50,w:50,h:20},{x:600,y:groundY-80,w:50,h:20}], enemies:[{x:600,y:groundY-80,type:8}]}
+];
+
+let currentLevel=0;
+let obstacles = [];
+let enemies = [];
+
+// ---- INPUT ----
+let keys={};
+document.addEventListener('keydown', e=>keys[e.key]=true);
+document.addEventListener('keyup', e=>keys[e.key]=false);
+
+// ---- ATTACKS ----
+function performAttack(key){
+  if(player.attackCooldown[key]>0) return;
+  player.attackCooldown[key]=20;
+  let atk={x:player.x,y:player.y,w:20,h:16};
+  if(key==='U'){ atk.x = player.x - 20*player.facing; atk.y = player.y; }
+  if(key==='J'){ atk.x = player.x - 20*player.facing; atk.y = player.y+16; }
+  if(key==='I'){ atk.x = player.x + player.w; atk.y = player.y; }
+  if(key==='K'){ atk.x = player.x + player.w; atk.y = player.y+16; }
+  enemies.forEach(e=>{
+    if(e.health>0 && atk.x<e.x+e.w && atk.x+atk.w>e.x &&
+       atk.y<e.y+e.h && atk.y+atk.h>e.y){
+       e.health--;
+    }
+  });
+}
+
+// ---- DRAW PLAYER PIXEL HUMAN ----
+function drawPlayer(){
+  ctx.fillStyle='red';
+  ctx.fillRect(player.x,player.y,player.w,player.h); // body
+  ctx.fillStyle='black';
+  ctx.fillRect(player.x+4,player.y,player.w-8,8); // head
+  // arms
+  if(keys['u']) ctx.fillRect(player.x-8,player.y,8,4);
+  if(keys['j']) ctx.fillRect(player.x-8,player.y+16,8,4);
+  if(keys['i']) ctx.fillRect(player.x+player.w,player.y,8,4);
+  if(keys['k']) ctx.fillRect(player.x+player.w,player.y+16,8,4);
+  // health bar
+  ctx.fillStyle='green';
+  ctx.fillRect(player.x,player.y-6,16*(player.health/10),4);
+}
+
+// ---- LOAD LEVEL ----
+function loadLevel(levelIndex){
+  let lvl = levels[levelIndex];
+  obstacles = lvl.platforms.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h}));
+  enemies = lvl.enemies.map(e=>new Enemy(e.x,e.y,e.type));
+  player.x=100; player.y=groundY-48; player.health=10;
+}
+
+// ---- GAME LOOP ----
+function gameLoop(){
+  // Movement
+  player.vx=0;
+  if(keys['a']) { player.vx=-player.speed; player.facing=-1; }
+  if(keys['d']) { player.vx=player.speed; player.facing=1; }
+  if(keys['w'] && player.onGround){ player.vy=player.jump; player.onGround=false; }
+
+  player.vy += gravity;
+  player.x += player.vx;
+  player.y += player.vy;
+  if(player.y+player.h>groundY){ player.y=groundY-player.h; player.vy=0; player.onGround=true;}
+
+  // Player attacks
+  ['U','J','I','K'].forEach(k=>{
+    if(keys[k.toLowerCase()]) performAttack(k);
+    if(player.attackCooldown[k]>0) player.attackCooldown[k]--;
+  });
+
+  // Enemy update
+  enemies.forEach(e=>e.update());
+
+  // DRAW
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#87CEEB';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Draw obstacles
+  ctx.fillStyle='brown';
+  obstacles.forEach(o=>ctx.fillRect(o.x,o.y,o.w,o.h));
+
+  // Draw player
+  drawPlayer();
+
+  // Draw enemies
+  enemies.forEach(e=>e.draw());
+
+  // Level info
+  ctx.fillStyle='black';
+  ctx.font='20px Arial';
+  ctx.fillText('Level '+(currentLevel+1), 650,30);
+
+  // Check win/lose
+  if(player.health<=0){
+    ctx.fillStyle='black';
+    ctx.font='50px Arial';
+    ctx.fillText('GAME OVER', canvas.width/2-150, canvas.height/2);
+  } else if(enemies.every(e=>e.health<=0)){
+    currentLevel++;
+    if(currentLevel>=levels.length){
+      ctx.fillStyle='black';
+      ctx.font='50px Arial';
+      ctx.fillText('YOU WIN!', canvas.width/2-150, canvas.height/2);
+      return;
+    } else {
+      loadLevel(currentLevel);
+    }
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ---- START GAME ----
+loadLevel(currentLevel);
+gameLoop();
+</script>
+</body>
+</html>
