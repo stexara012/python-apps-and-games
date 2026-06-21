@@ -374,14 +374,18 @@ apple_sprite = render_ascii(ascii_apple, pg.Color("red"))
 # --- Inicijalizacija zmije ---
 snake = pg.Rect(0, 0, TILE_SIZE-2, TILE_SIZE-2)
 snake.center = get_random_position()
-segments = [snake.copy()]
-snake_dir = (0, 0)
-length = 1
+snake_dir = (TILE_SIZE, 0)
+length = 3
+segments = [
+  snake.copy().move(-2 * TILE_SIZE, 0),
+  snake.copy().move(-1 * TILE_SIZE, 0),
+  snake.copy(),
+]
 time, time_step = 0, 220
 food = snake.copy()
 food.center = get_random_position()
 
-last_dir = (0, 0)
+last_dir = snake_dir
 
 # --- Glavna petlja ---
 running = True
